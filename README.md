@@ -3,6 +3,9 @@
 A lightweight http library with concise implementation, which can seamlessly replace native libraries in most cases.  
 一个轻量级的http库，实现简明，在大部分情况下可以无缝替换原生库。  
 
+Used to demonstrate the principles of the HTTP protocol. Learn tricks by comparing with the standard library.  
+用于演示HTTP协议的原理。通过和标准库对比来学习技巧。  
+
 ## Getting Started 起步
 
 ### Getting go-tiny-http 获取go-tiny-http
