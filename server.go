@@ -3,6 +3,7 @@ package http
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -10,8 +11,9 @@ import (
 )
 
 const (
-	HOSTNAME = "0.0.0.0"
-	PROTOCOL = "tcp"
+	HOSTNAME    = "0.0.0.0"
+	PROTOCOL    = "tcp"
+	VERSION_1_1 = "HTTP/1.1"
 )
 
 var router = map[string]func(ResponseWriter, *Request){}
@@ -30,16 +32,25 @@ func ListenAndServe(addr string, handler interface{}) error {
 	}
 	defer listener.Close()
 
-	// Establish a connection
-	// 建链
-	conn, err := listener.Accept()
-	if err != nil {
-		return err
-	}
+	for {
 
-	// Create a goroutine to handle the connection
-	// 协程处理连接
-	go handleConn(conn)
+		// Establish a connection
+		// 建链
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+
+		// Create a goroutine to handle the connection
+		// 协程处理连接
+		go func() {
+			defer func() {
+				recover()
+			}()
+			handleConn(conn)
+		}()
+
+	}
 
 	// Blocking
 	// 阻塞
@@ -52,76 +63,83 @@ func ListenAndServe(addr string, handler interface{}) error {
 
 func handleConn(conn net.Conn) {
 
+	reader := bufio.NewReader(conn)
+
+	var req Request
+
+	// request line
+	// 请求行
+	reqLine, err := reader.ReadString('\n')
+	if err == io.EOF {
+		// Use return, don't use panic-recover
+		// The performance of return is better than panic, and here my recover doesn't do any meaningful work
+		return
+	}
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+	reqLineFields := strings.Split(reqLine, " ")
+	if len(reqLineFields) < 3 {
+		panic("request line fields are too few")
+	}
+	req.Method = reqLineFields[0]
+	req.URL = reqLineFields[1]
+	req.Proto = reqLineFields[2]
+
+	// request headers
+	// 请求头
+	bodySize := 0
+	headers := make(map[string]string)
 	for {
-
-		reader := bufio.NewReader(conn)
-
-		var req Request
-
-		// request line
-		// 请求行
-		reqLine, err := reader.ReadString('\n')
+		HeaderLine, err := reader.ReadString('\n')
 		if err != nil {
 			panic(err)
 		}
-		reqLineFields := strings.Split(reqLine, " ")
-		req.Method = reqLineFields[0]
-		req.URL = reqLineFields[1]
-		req.Proto = reqLineFields[2]
-
-		// request headers
-		// 请求头
-		bodySize := 0
-		headers := make(map[string]string)
-		for {
-			HeaderLine, err := reader.ReadString('\n')
+		// "\r\n" marks the end of the request headers section
+		// 读取到"\r\n"时结束
+		if HeaderLine == "\r\n" {
+			break
+		}
+		HeaderLine = strings.TrimRight(HeaderLine, "\r\n")
+		key, value := getKeyValue(HeaderLine)
+		headers[key] = value
+		// Retrieve the size of the request body from the request header named "Content-Length"
+		// The keys of the request header are case-insensitive
+		// 从"Content-Length"请求头中获取请求体大小
+		// 请求头的键名是不区分大小写的
+		if strings.ToLower(key) == "content-length" {
+			bodySize, err = strconv.Atoi(strings.TrimRight(value, "\r\n"))
 			if err != nil {
 				panic(err)
 			}
-			// "\r\n" marks the end of the request headers section
-			// 读取到"\r\n"时结束
-			if HeaderLine == "\r\n" {
-				break
-			}
-			HeaderLine = strings.TrimRight(HeaderLine, "\r\n")
-			key, value := getKeyValue(HeaderLine)
-			headers[key] = value
-			// Retrieve the size of the request body from the request header named "Content-Length"
-			// The keys of the request header are case-insensitive
-			// 从"Content-Length"请求头中获取请求体大小
-			// 请求头的键名是不区分大小写的
-			if strings.ToLower(key) == "content-length" {
-				bodySize, err = strconv.Atoi(strings.TrimRight(value, "\r\n"))
-				if err != nil {
-					panic(err)
-				}
-			}
 		}
-
-		// request body
-		// 请求体
-		if bodySize > 0 {
-			p := make([]byte, bodySize)
-			_, err := reader.Read(p)
-			if err != nil {
-				panic(err)
-			}
-			req.Body.value = p
-		}
-
-		// response
-		// 响应
-		handler, ok := router[req.URL]
-		if !ok {
-			panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL, req.URL))
-		}
-		var rw responseWriter
-		handler(&rw, &req)
-		respLine := "HTTP/1.1 200 OK\r\n"
-		respHeaders := fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
-		resp := respLine + respHeaders + "\r\n" + rw.ResponseBody
-		conn.Write([]byte(resp))
 	}
+
+	// request body
+	// 请求体
+	if bodySize > 0 {
+		p := make([]byte, bodySize)
+		_, err := reader.Read(p)
+		if err != nil {
+			panic(err)
+		}
+		req.Body.value = p
+	}
+
+	// response
+	// 响应
+	handler, ok := router[req.URL]
+	if !ok {
+		panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL, req.URL))
+	}
+	var rw responseWriter
+	rw.SetStatusCode(200)
+	handler(&rw, &req)
+	// respLine := "HTTP/1.1 200 OK\r\n"
+	respLine := fmt.Sprintf("%s %d %s\r\n", VERSION_1_1, rw.StatusCode, MessageMap[rw.StatusCode])
+	respHeaders := fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
+	resp := respLine + respHeaders + "\r\n" + rw.ResponseBody
+	conn.Write([]byte(resp))
 
 }
 
