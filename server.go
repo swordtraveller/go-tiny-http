@@ -45,7 +45,6 @@ func ListenAndServe(addr string, handler interface{}) error {
 		// 协程处理连接
 		go func() {
 			defer func() {
-				recover()
 			}()
 			handleConn(conn)
 		}()
@@ -83,13 +82,13 @@ func handleConn(conn net.Conn) {
 		panic("request line fields are too few")
 	}
 	req.Method = reqLineFields[0]
-	req.URL = reqLineFields[1]
+	req.URL.Path = reqLineFields[1]
 	req.Proto = reqLineFields[2]
 
 	// request headers
 	// 请求头
 	bodySize := 0
-	headers := make(map[string]string)
+	req.Header = make(map[string][]string)
 	for {
 		HeaderLine, err := reader.ReadString('\n')
 		if err != nil {
@@ -102,7 +101,7 @@ func handleConn(conn net.Conn) {
 		}
 		HeaderLine = strings.TrimRight(HeaderLine, "\r\n")
 		key, value := getKeyValue(HeaderLine)
-		headers[key] = value
+		req.Header[key] = append(req.Header[key], value)
 		// Retrieve the size of the request body from the request header named "Content-Length"
 		// The keys of the request header are case-insensitive
 		// 从"Content-Length"请求头中获取请求体大小
@@ -128,9 +127,9 @@ func handleConn(conn net.Conn) {
 
 	// response
 	// 响应
-	handler, ok := router[req.URL]
+	handler, ok := router[req.URL.Path]
 	if !ok {
-		panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL, req.URL))
+		panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL.Path, req.URL.Path))
 	}
 	var rw responseWriter
 	rw.SetStatusCode(200)
