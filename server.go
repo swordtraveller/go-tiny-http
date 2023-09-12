@@ -83,7 +83,7 @@ func handleConn(conn net.Conn) {
 		panic("request line fields are too few")
 	}
 	req.Method = reqLineFields[0]
-	req.URL = reqLineFields[1]
+	req.URL.Path = reqLineFields[1]
 	req.Proto = reqLineFields[2]
 
 	// request headers
@@ -128,9 +128,9 @@ func handleConn(conn net.Conn) {
 
 	// response
 	// 响应
-	handler, ok := router[req.URL]
+	handler, ok := router[req.URL.Path]
 	if !ok {
-		panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL, req.URL))
+		panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL.Path, req.URL.Path))
 	}
 	var rw responseWriter
 	rw.SetStatusCode(200)

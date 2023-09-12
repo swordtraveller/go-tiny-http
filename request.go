@@ -6,7 +6,7 @@ import (
 
 type Request struct {
 	Method  string
-	URL     string
+	URL     URL
 	Proto   string
 	Headers map[string]string
 	Body    ReadCloser
