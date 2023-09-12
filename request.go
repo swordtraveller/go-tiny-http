@@ -5,11 +5,11 @@ import (
 )
 
 type Request struct {
-	Method  string
-	URL     URL
-	Proto   string
-	Headers map[string]string
-	Body    ReadCloser
+	Method string
+	URL    URL
+	Proto  string
+	Header map[string][]string
+	Body   ReadCloser
 }
 
 type ReadCloser struct {
