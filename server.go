@@ -16,13 +16,17 @@ const (
 	VERSION_1_1 = "HTTP/1.1"
 )
 
+type Handler interface {
+	ServeHTTP(ResponseWriter, *Request)
+}
+
 var router = map[string]func(ResponseWriter, *Request){}
 
 func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 	router[pattern] = handler
 }
 
-func ListenAndServe(addr string, handler interface{}) error {
+func ListenAndServe(addr string, srvHandler Handler) error {
 
 	// Create a server
 	// 创建服务器
@@ -46,7 +50,7 @@ func ListenAndServe(addr string, handler interface{}) error {
 		go func() {
 			defer func() {
 			}()
-			handleConn(conn)
+			handleConn(conn, srvHandler)
 		}()
 
 	}
@@ -60,7 +64,7 @@ func ListenAndServe(addr string, handler interface{}) error {
 
 }
 
-func handleConn(conn net.Conn) {
+func handleConn(conn net.Conn, srvHandler Handler) {
 
 	reader := bufio.NewReader(conn)
 
@@ -127,13 +131,22 @@ func handleConn(conn net.Conn) {
 
 	// response
 	// 响应
-	handler, ok := router[req.URL.Path]
-	if !ok {
-		panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL.Path, req.URL.Path))
-	}
 	var rw responseWriter
 	rw.SetStatusCode(200)
-	handler(&rw, &req)
+
+	// srvHandler != nil when http.ListenAndServe(":1234", handler) if handler is not nil
+	// srvHandler is nil when http.ListenAndServe(":1234", nil)
+	// srvHandler 即用户调用http.ListenAndServe(addr, handler)时传入的第二个参数
+	if srvHandler != nil {
+		srvHandler.ServeHTTP(&rw, &req)
+	} else {
+		handler, ok := router[req.URL.Path]
+		if !ok {
+			panic(fmt.Sprintf("Route %s does not exist! 路由%s不存在！", req.URL.Path, req.URL.Path))
+		}
+		handler(&rw, &req)
+	}
+
 	// respLine := "HTTP/1.1 200 OK\r\n"
 	respLine := fmt.Sprintf("%s %d %s\r\n", VERSION_1_1, rw.StatusCode, MessageMap[rw.StatusCode])
 	respHeaders := fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
