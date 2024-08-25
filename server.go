@@ -152,7 +152,7 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 	respHeaders := fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
 	resp := respLine + respHeaders + "\r\n" + rw.ResponseBody
 	conn.Write([]byte(resp))
-
+	conn.Close()
 }
 
 func getKeyValue(input string) (string, string) {
