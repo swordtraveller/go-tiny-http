@@ -2,7 +2,6 @@ package http
 
 import (
 	"io"
-	"strings"
 )
 
 type Request struct {
@@ -11,7 +10,6 @@ type Request struct {
 	Proto  string
 	Header map[string][]string
 	Body   ReadCloser
-	Form   map[string][]string
 }
 
 type ReadCloser struct {
@@ -31,33 +29,4 @@ func (rc ReadCloser) Read(p []byte) (n int, err error) {
 		}
 	}
 	return curProgress, nil
-}
-
-func (r *Request) FormValue(key string) string {
-	// 懒计算 / 惰性求值
-	// lazy evaluation
-	if r.Form == nil {
-		r.formValue()
-	}
-	value, ok := r.Form[key]
-	if ok {
-		return value[0]
-	}
-	return ""
-}
-
-func (r *Request) formValue() {
-	r.Form = getKeyValueFromForm(r.URL.RawQuery)
-}
-
-func getKeyValueFromForm(input string) map[string][]string {
-	result := make(map[string][]string)
-	terms := strings.Split(input, "&")
-	for _, term := range terms {
-		keyAndValue := strings.Split(term, "=")
-		tmp := make([]string, 0)
-		tmp = append(tmp, keyAndValue[1])
-		result[keyAndValue[0]] = tmp
-	}
-	return result
 }
