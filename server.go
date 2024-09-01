@@ -86,6 +86,13 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 		panic("request line fields are too few")
 	}
 	req.Method = reqLineFields[0]
+	PathAndQuery := strings.Split(reqLineFields[1], "?")
+	if len(PathAndQuery) > 0 {
+		req.URL.Path = PathAndQuery[0]
+		if len(PathAndQuery) > 1 {
+			req.URL.RawQuery = PathAndQuery[1]
+		}
+	}
 	req.URL.Path = reqLineFields[1]
 	req.Proto = reqLineFields[2]
 
@@ -149,7 +156,18 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 
 	// respLine := "HTTP/1.1 200 OK\r\n"
 	respLine := fmt.Sprintf("%s %d %s\r\n", VERSION_1_1, rw.StatusCode, MessageMap[rw.StatusCode])
-	respHeaders := fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
+	respHeaders := ""
+	header := rw.Header()
+	hasContentLengthHeader := false
+	for k, v := range header {
+		if k == "Content-Length" {
+			hasContentLengthHeader = true
+		}
+		respHeaders = respHeaders + fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	if !hasContentLengthHeader {
+		respHeaders = respHeaders + fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
+	}
 	resp := respLine + respHeaders + "\r\n" + rw.ResponseBody
 	conn.Write([]byte(resp))
 	conn.Close()
