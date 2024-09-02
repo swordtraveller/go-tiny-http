@@ -18,10 +18,12 @@ func ParseQuery(input string) (Values, error) {
 	values := make(Values)
 	terms := strings.Split(input, "&")
 	for _, term := range terms {
-		tmp := make([]string, 0)
 		keyAndValue := strings.Split(term, "=")
-		tmp = append(tmp, keyAndValue[1])
-		values[keyAndValue[0]] = tmp
+		if len(keyAndValue) > 1 {
+			tmp := make([]string, 0)
+			tmp = append(tmp, keyAndValue[1])
+			values[keyAndValue[0]] = tmp
+		}
 	}
 	return values, nil
 }
