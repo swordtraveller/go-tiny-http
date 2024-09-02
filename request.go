@@ -55,9 +55,11 @@ func getKeyValueFromForm(input string) map[string][]string {
 	terms := strings.Split(input, "&")
 	for _, term := range terms {
 		keyAndValue := strings.Split(term, "=")
-		tmp := make([]string, 0)
-		tmp = append(tmp, keyAndValue[1])
-		result[keyAndValue[0]] = tmp
+		if len(keyAndValue) > 1 {
+			tmp := make([]string, 0)
+			tmp = append(tmp, keyAndValue[1])
+			result[keyAndValue[0]] = tmp
+		}
 	}
 	return result
 }

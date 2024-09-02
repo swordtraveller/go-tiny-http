@@ -92,8 +92,9 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 		if len(PathAndQuery) > 1 {
 			req.URL.RawQuery = PathAndQuery[1]
 		}
+	} else {
+		req.URL.Path = reqLineFields[1]
 	}
-	req.URL.Path = reqLineFields[1]
 	req.Proto = reqLineFields[2]
 
 	// request headers
