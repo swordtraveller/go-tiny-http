@@ -22,6 +22,16 @@ type Handler interface {
 
 var router = map[string]func(ResponseWriter, *Request){}
 
+type HandlerFunc func(resp ResponseWriter, request *Request)
+
+func (f HandlerFunc) ServeHTTP(resp ResponseWriter, req *Request) {
+	f(resp, req)
+}
+
+func NotFound(w ResponseWriter, r *Request) {
+	Error(w, "404 page not found", StatusNotFound)
+}
+
 func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 	router[pattern] = handler
 }
@@ -68,7 +78,9 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 
 	reader := bufio.NewReader(conn)
 
-	var req Request
+	// `v := V{}` is better than `var v V`
+	req := Request{}
+	req.URL = &URL{}
 
 	// request line
 	// 请求行
@@ -86,6 +98,7 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 		panic("request line fields are too few")
 	}
 	req.Method = reqLineFields[0]
+	req.RequestURI = reqLineFields[1]
 	PathAndQuery := strings.Split(reqLineFields[1], "?")
 	if len(PathAndQuery) > 0 {
 		req.URL.Path = PathAndQuery[0]
@@ -159,15 +172,17 @@ func handleConn(conn net.Conn, srvHandler Handler) {
 	respLine := fmt.Sprintf("%s %d %s\r\n", VERSION_1_1, rw.StatusCode, MessageMap[rw.StatusCode])
 	respHeaders := ""
 	header := rw.Header()
-	hasContentLengthHeader := false
+	rw.Header().Set("Content-Length", strconv.Itoa(rw.ContentLength))
 	for k, v := range header {
 		if k == "Content-Length" {
-			hasContentLengthHeader = true
+			// If it is a single value
+			// 如果是单值
+			respHeaders = respHeaders + fmt.Sprintf("%s: %s\r\n", k, v[0])
+		} else {
+			// If it is a list
+			// 如果是列表
+			respHeaders = respHeaders + fmt.Sprintf("%s: %s\r\n", k, v)
 		}
-		respHeaders = respHeaders + fmt.Sprintf("%s: %s\r\n", k, v)
-	}
-	if !hasContentLengthHeader {
-		respHeaders = respHeaders + fmt.Sprintf("Content-Length: %d\r\n", rw.ContentLength)
 	}
 	resp := respLine + respHeaders + "\r\n" + rw.ResponseBody
 	conn.Write([]byte(resp))
@@ -214,4 +229,40 @@ Loop:
 	value = input[index:]
 	return key, value
 
+}
+
+// StripPrefix
+// ("/user", handler) => StripPrefix => new_handler
+// "/user/info" => new_handler => "/info"
+// "/admin/info" => new_handler => 404
+func StripPrefix(prefix string, handler Handler) Handler {
+	if prefix == "" {
+		return handler
+	}
+	// HandleFunc here is a type not a func
+	var newHandler HandlerFunc
+	newHandler = func(resp ResponseWriter, req *Request) {
+		newPath := strings.TrimPrefix(req.URL.Path, prefix)
+		if len(newPath) < len(req.URL.Path) {
+			// if trim successfully
+			// shallow copy
+			newRequest := new(Request)
+			*newRequest = *req
+			// shallow copy
+			newRequest.URL = new(URL)
+			*newRequest.URL = *req.URL
+
+			// or using DeepClone may also be a good idea
+			// "github.com/duke-git/lancet/v2/convertor"
+			// newRequest := convertor.DeepClone(Request)
+
+			// change `newRequest.URL.Path` instead of changing `req.URL.Path`
+			newRequest.URL.Path = newPath
+			handler.ServeHTTP(resp, newRequest)
+		} else {
+			// failed
+			NotFound(resp, req)
+		}
+	}
+	return newHandler
 }
