@@ -6,12 +6,13 @@ import (
 )
 
 type Request struct {
-	Method string
-	URL    URL
-	Proto  string
-	Header map[string][]string
-	Body   ReadCloser
-	Form   map[string][]string
+	Method     string
+	URL        *URL
+	Proto      string
+	Header     map[string][]string
+	Body       ReadCloser
+	Form       map[string][]string
+	RequestURI string
 }
 
 type ReadCloser struct {
