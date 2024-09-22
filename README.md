@@ -110,3 +110,31 @@ func helloHandler(w http.ResponseWriter, req *http.Request) {
 
 Tested again and the results were consistent with before.  
 再次测试，结果与之前一致。  
+
+## 自动化测试
+
+我们可以在 Github 仓库的 `Actions` 板块中点击 `New workflow` ，选择一个模板，这里选用 Github 自动推荐的 "Go" 模板，点击 `Configure` ，即可添加新的自动化任务。
+
+有几个值得注意的部分。  
+
+首先是触发的时机，可以在 push 或者 PR 时触发：  
+
+```yaml
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+```
+
+如果想改为对所有分支生效，可以在 `branches` 字段填写 `"*"` 值。   
+
+然后模板中有一个名为 "build" 的 job ，它有许多 steps （阶段），其中两个重要的是 "Build" 和 "Test" ，用来执行编译和测试步骤，在 `run` 字段里可以输入命令内容。  
+
+```yaml
+- name: Build
+  run: go build -v ./...
+
+- name: Test
+  run: go test -v ./...
+```
