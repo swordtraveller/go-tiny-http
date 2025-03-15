@@ -148,3 +148,33 @@ on:
 此时如果利用零拷贝的特性，让内核直接取用户进程内存空间该处的文件数据，无需额外复制就交给网络协议栈处理，就可以节省掉复制的开销；  
 要利用零拷贝特性，需要内核通过系统调用之类的形式提供支持； Linux 系统提供了 sendfile 系统调用，Windows 系统提供的则是 TransmitFile 。  
 Go 标准库提供的 io.Copy() 等就含有上述优化；在 fs.go 中，我们也用到了 io.Copy() 。  
+
+## Epoll
+
+通过使用 `net.Listen()` ，我们就可以享受到 Go 标准库为利用 epoll 机制所做的大量工作了（特指 Linux 平台），可以从 `net.Listen()` 一路追寻到如下源码：  
+[go/src/runtime/netpoll_epoll.go](https://github.com/golang/go/blob/21417518a9e826973c316d3328e069b7535bb23c/src/runtime/netpoll_epoll.go#L21)  
+```go
+func netpollinit() {
+	var errno uintptr
+	epfd, errno = syscall.EpollCreate1(syscall.EPOLL_CLOEXEC)
+	if errno != 0 {
+		println("runtime: epollcreate failed with", errno)
+		throw("runtime: netpollinit failed")
+	}
+	efd, errno := syscall.Eventfd(0, syscall.EFD_CLOEXEC|syscall.EFD_NONBLOCK)
+	if errno != 0 {
+		println("runtime: eventfd failed with", -errno)
+		throw("runtime: eventfd failed")
+	}
+	ev := syscall.EpollEvent{
+		Events: syscall.EPOLLIN,
+	}
+	*(**uintptr)(unsafe.Pointer(&ev.Data)) = &netpollEventFd
+	errno = syscall.EpollCtl(epfd, syscall.EPOLL_CTL_ADD, efd, &ev)
+	if errno != 0 {
+		println("runtime: epollctl failed with", errno)
+		throw("runtime: epollctl failed")
+	}
+	netpollEventFd = uintptr(efd)
+}
+```
